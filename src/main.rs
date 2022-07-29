@@ -2,6 +2,9 @@ use std::env::args;
 use std::io::BufRead;
 use std::{fs::File, io};
 
+#[macro_use]
+extern crate log;
+
 #[derive(Debug, Clone, Copy)]
 
 struct Cell {
@@ -54,10 +57,11 @@ impl Sudoku {
 
     fn solve(&mut self) -> bool {
         let (pos, values) = self.find_best_position();
+        debug!("pos = {:?}, values = {:?}", &pos, &values);
         if values.is_empty() {
             return self.is_ok();
         } else {
-            // println!("Try on {:?} wi {:?}", &pos, &values);
+            debug!("Try on {:?} wi {:?}", &pos, &values);
             self.try_count += 1;
             for v in values {
                 self.data[pos.row][pos.column].value = v;
@@ -65,7 +69,7 @@ impl Sudoku {
                     return true;
                 }
             }
-            // println!("Roll back here!!!!");
+            info!("Roll back here!!!!");
             self.data[pos.row][pos.column].value = -1;
         }
         false
@@ -82,7 +86,7 @@ impl Sudoku {
                 let cell = self.get(&pos);
                 if !cell.valid() {
                     let values = self.get_available_values(&pos);
-                    // println!("{:?} -> {:?} values = {:?}", &pos, values.len(), values);
+                    debug!("{:?} -> {:?} values = {:?}", &pos, values.len(), values);
 
                     if values.len() == 1 {
                         return (pos, values);
@@ -204,6 +208,7 @@ impl Sudoku {
 }
 
 fn main() {
+    env_logger::init();
     let args: Vec<String> = args().collect();
     let file_name = &args[1];
     let mut s = Sudoku::from_file(file_name.as_str());
