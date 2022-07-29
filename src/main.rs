@@ -65,7 +65,7 @@ impl Sudoku {
                     return true;
                 }
             }
-            println!("Roll back here!!!!");
+            // println!("Roll back here!!!!");
             self.data[pos.row][pos.column].value = -1;
         }
         false
@@ -118,7 +118,7 @@ impl Sudoku {
     }
 
     fn print(&self) {
-        println!("---------");
+        println!("Status: OK? {}", self.is_ok());
         for r in self.data {
             let out: Vec<String> = r
                 .into_iter()
@@ -126,7 +126,7 @@ impl Sudoku {
                 .collect();
             println!("{}", out.join(" "));
         }
-        println!("---------");
+        println!();
     }
     fn from_file(file_name: &str) -> Sudoku {
         let mut out = Sudoku::new();
@@ -210,10 +210,6 @@ fn main() {
     s.print();
 
     s.solve();
-    println!("");
-
-    println!("Result: ok = {}", s.is_ok());
     s.print();
-    println!("");
     println!("end, try count = {}", s.try_count);
 }
