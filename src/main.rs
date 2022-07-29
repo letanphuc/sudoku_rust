@@ -1,3 +1,4 @@
+use std::env::args;
 use std::io::BufRead;
 use std::{fs::File, io};
 
@@ -56,7 +57,7 @@ impl Sudoku {
         if values.is_empty() {
             return self.is_ok();
         } else {
-            println!("Try on {:?} wi {:?}", &pos, &values);
+            // println!("Try on {:?} wi {:?}", &pos, &values);
             self.try_count += 1;
             for v in values {
                 self.data[pos.row][pos.column].value = v;
@@ -117,6 +118,7 @@ impl Sudoku {
     }
 
     fn print(&self) {
+        println!("---------");
         for r in self.data {
             let out: Vec<String> = r
                 .into_iter()
@@ -124,6 +126,7 @@ impl Sudoku {
                 .collect();
             println!("{}", out.join(" "));
         }
+        println!("---------");
     }
     fn from_file(file_name: &str) -> Sudoku {
         let mut out = Sudoku::new();
@@ -187,10 +190,7 @@ impl Sudoku {
         let check_a_zone = |zone: &Vec<Vec<Position>>| -> bool {
             let expected: Vec<i8> = (1..10).collect();
             for row in zone {
-                let mut r: Vec<i8> = row
-                    .iter()
-                    .map(|p| -> i8 { self.get(p).value })
-                    .collect();
+                let mut r: Vec<i8> = row.iter().map(|p| -> i8 { self.get(p).value }).collect();
                 r.sort_unstable();
                 if r != expected {
                     return false;
@@ -204,13 +204,16 @@ impl Sudoku {
 }
 
 fn main() {
-    // let s = Sudoku::from_file("./src/data/example1_ok.txt");
-    let mut s = Sudoku::from_file("./src/data/example2.txt");
+    let args: Vec<String> = args().collect();
+    let file_name = &args[1];
+    let mut s = Sudoku::from_file(file_name.as_str());
     s.print();
 
     s.solve();
+    println!("");
 
-    println!("ok = {}", s.is_ok());
+    println!("Result: ok = {}", s.is_ok());
     s.print();
+    println!("");
     println!("end, try count = {}", s.try_count);
 }
