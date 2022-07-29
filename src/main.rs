@@ -34,71 +34,70 @@ struct Position {
 
 struct Sudoku {
     data: [[Cell; 9]; 9],
-    empty_positions: Vec<Position>,
     try_count: i128,
     rows: Vec<Vec<Position>>,
     colums: Vec<Vec<Position>>,
     regions: Vec<Vec<Position>>,
-    available_values: Vec<Vec<i8>>,
 }
 
 impl Sudoku {
     fn new() -> Sudoku {
         Sudoku {
             data: [[Cell::new(-1); 9]; 9],
-            empty_positions: Vec::new(),
             try_count: 0,
             rows: Sudoku::rows(),
             colums: Sudoku::columns(),
             regions: Sudoku::regions(),
-            available_values: Vec::new(),
         }
     }
 
-    fn solve(&mut self) {
+    fn solve(&mut self) -> bool {
+        let (pos, values) = self.find_best_position();
+        if values.is_empty() {
+            return self.is_ok();
+        } else {
+            println!("Try on {:?} wi {:?}", &pos, &values);
+            self.try_count += 1;
+            for v in values {
+                self.data[pos.row][pos.column].value = v;
+                if self.solve() {
+                    return true;
+                }
+            }
+            println!("Roll back here!!!!");
+            self.data[pos.row][pos.column].value = -1;
+        }
+        false
+    }
+
+    fn find_best_position(&mut self) -> (Position, Vec<i8>) {
+        let mut current_min = 9_usize;
+        let mut current_position = Position { row: 0, column: 0 };
+        let mut current_values = vec![];
+
         for row in 0..9 {
             for col in 0..9 {
                 let pos = Position { row, column: col };
                 let cell = self.get(&pos);
                 if !cell.valid() {
                     let values = self.get_available_values(&pos);
-                    println!("{:?} -> {:?} values = {:?}", &pos, values.len(), values);
+                    // println!("{:?} -> {:?} values = {:?}", &pos, values.len(), values);
 
-                    self.available_values.push(values);
-                    self.empty_positions.push(pos);
+                    if values.len() == 1 {
+                        return (pos, values);
+                    } else if values.len() < current_min {
+                        current_min = values.len();
+                        current_position = pos;
+                        current_values = values;
+                    }
                 }
             }
         }
-        self.solve_internal(0);
-    }
-
-    fn solve_internal(&mut self, index: usize) -> bool {
-        if self.is_ok() {
-            println!("Done, OK:");
-            self.print();
-            return true;
-        }
-
-        println!("Try {index} {}", self.try_count);
-        self.try_count += 1;
-        if self.empty_positions.len() > index {
-            let pos = self.empty_positions[index];
-            let cells = self.get_available_values(&pos);
-
-            for try_value in cells {
-                self.data[pos.row][pos.column].value = try_value;
-                if self.solve_internal(index + 1) {
-                    return true;
-                }
-            }
-            // roll back
-            self.data[pos.row][pos.column].value = -1;
-        }
-        false
+        (current_position, current_values)
     }
 
     fn get_available_values(&self, pos: &Position) -> Vec<i8> {
-        let (row, col, region) = Sudoku::get_zone(&pos);
+        let (row, col, region) = Sudoku::get_zone(pos);
 
         let mut cells: Vec<Position> = self.rows[row].clone();
         cells.extend(self.colums[col].clone());
@@ -185,50 +184,33 @@ impl Sudoku {
     }
 
     fn is_ok(&self) -> bool {
-        let expected: Vec<i8> = (1..10).collect();
-        for row in Sudoku::rows() {
-            let mut r: Vec<i8> = row
-                .into_iter()
-                .map(|p| -> i8 { self.get(&p).value })
-                .collect();
-            r.sort();
-            if r != expected {
-                return false;
+        let check_a_zone = |zone: &Vec<Vec<Position>>| -> bool {
+            let expected: Vec<i8> = (1..10).collect();
+            for row in zone {
+                let mut r: Vec<i8> = row
+                    .iter()
+                    .map(|p| -> i8 { self.get(p).value })
+                    .collect();
+                r.sort_unstable();
+                if r != expected {
+                    return false;
+                }
             }
-        }
-        for cols in Sudoku::columns() {
-            let mut r: Vec<i8> = cols
-                .into_iter()
-                .map(|p| -> i8 { self.get(&p).value })
-                .collect();
-            r.sort();
-            if r != expected {
-                return false;
-            }
-        }
+            true
+        };
 
-        for regions in Sudoku::regions() {
-            let mut r: Vec<i8> = regions
-                .into_iter()
-                .map(|p| -> i8 { self.get(&p).value })
-                .collect();
-            r.sort();
-            if r != expected {
-                return false;
-            }
-        }
-
-        true
+        check_a_zone(&self.rows) && check_a_zone(&self.colums) && check_a_zone(&self.regions)
     }
 }
 
 fn main() {
     // let s = Sudoku::from_file("./src/data/example1_ok.txt");
-    let mut s = Sudoku::from_file("./src/data/example1.txt");
+    let mut s = Sudoku::from_file("./src/data/example2.txt");
     s.print();
 
     s.solve();
 
     println!("ok = {}", s.is_ok());
-    println!("end");
+    s.print();
+    println!("end, try count = {}", s.try_count);
 }
