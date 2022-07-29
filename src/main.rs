@@ -1,37 +1,35 @@
 use std::io::BufRead;
-use std::{cell, vec};
 use std::{fs::File, io};
 
 #[derive(Debug, Clone, Copy)]
 
 struct Cell {
     value: i8,
-    is_fixed: bool,
 }
 
 impl Cell {
     fn valid(&self) -> bool {
         self.value != -1
     }
-    fn new(value: i8, is_fixed: bool) -> Cell {
-        Cell { value, is_fixed }
+    fn new(value: i8) -> Cell {
+        Cell { value }
     }
 
-    fn to_char(&self) -> char {
+    fn as_char(&self) -> char {
         match self.value {
             1..=9 => std::char::from_digit(self.value as u32, 10).unwrap(),
             _ => '_',
         }
     }
 
-    fn to_string(&self) -> String {
-        self.to_char().to_string()
+    fn as_string(&self) -> String {
+        self.as_char().to_string()
     }
 }
 #[derive(Debug, Clone, Copy)]
 struct Position {
-    x: usize,
-    y: usize,
+    row: usize,
+    column: usize,
 }
 
 struct Sudoku {
@@ -41,31 +39,36 @@ struct Sudoku {
     rows: Vec<Vec<Position>>,
     colums: Vec<Vec<Position>>,
     regions: Vec<Vec<Position>>,
+    available_values: Vec<Vec<i8>>,
 }
 
 impl Sudoku {
     fn new() -> Sudoku {
         Sudoku {
-            data: [[Cell::new(-1, false); 9]; 9],
+            data: [[Cell::new(-1); 9]; 9],
             empty_positions: Vec::new(),
             try_count: 0,
             rows: Sudoku::rows(),
             colums: Sudoku::columns(),
             regions: Sudoku::regions(),
+            available_values: Vec::new(),
         }
     }
 
     fn solve(&mut self) {
         for row in 0..9 {
             for col in 0..9 {
-                let pos = Position { x: row, y: col };
+                let pos = Position { row, column: col };
                 let cell = self.get(&pos);
                 if !cell.valid() {
+                    let values = self.get_available_values(&pos);
+                    println!("{:?} -> {:?} values = {:?}", &pos, values.len(), values);
+
+                    self.available_values.push(values);
                     self.empty_positions.push(pos);
                 }
             }
         }
-        dbg!(&(self.empty_positions));
         self.solve_internal(0);
     }
 
@@ -80,40 +83,45 @@ impl Sudoku {
         self.try_count += 1;
         if self.empty_positions.len() > index {
             let pos = self.empty_positions[index];
-            let (row, col, region) = Sudoku::get_zone(&pos);
-
-            let mut cells: Vec<Position> = self.rows[row].clone();
-            cells.extend(self.colums[col].clone());
-            cells.extend(self.regions[region].clone());
-
-            let cells: Vec<i8> = cells
-                .into_iter()
-                .map(|p| -> i8 { self.data[p.x][p.y].value })
-                .collect();
-            let cells: Vec<i8> = (1..10).filter(|v| -> bool { !cells.contains(v) }).collect();
+            let cells = self.get_available_values(&pos);
 
             for try_value in cells {
-                self.data[pos.x][pos.y].value = try_value;
+                self.data[pos.row][pos.column].value = try_value;
                 if self.solve_internal(index + 1) {
                     return true;
                 }
             }
-            self.data[pos.x][pos.y].value = -1;
+            // roll back
+            self.data[pos.row][pos.column].value = -1;
         }
         false
     }
 
+    fn get_available_values(&self, pos: &Position) -> Vec<i8> {
+        let (row, col, region) = Sudoku::get_zone(&pos);
+
+        let mut cells: Vec<Position> = self.rows[row].clone();
+        cells.extend(self.colums[col].clone());
+        cells.extend(self.regions[region].clone());
+
+        let cells: Vec<i8> = cells
+            .into_iter()
+            .map(|p| -> i8 { self.data[p.row][p.column].value })
+            .collect();
+        (1..10).filter(|v| -> bool { !cells.contains(v) }).collect()
+    }
+
     fn get_zone(pos: &Position) -> (usize, usize, usize) {
-        let tmp_x = pos.x / 3;
-        let tmp_y = pos.y / 3;
-        (pos.x, pos.y, tmp_x * 3 + tmp_y)
+        let tmp_x = pos.row / 3;
+        let tmp_y = pos.column / 3;
+        (pos.row, pos.column, tmp_x * 3 + tmp_y)
     }
 
     fn print(&self) {
         for r in self.data {
             let out: Vec<String> = r
                 .into_iter()
-                .map(|num| -> String { num.to_string() })
+                .map(|num| -> String { num.as_string() })
                 .collect();
             println!("{}", out.join(" "));
         }
@@ -126,8 +134,8 @@ impl Sudoku {
             if let Ok(content) = line {
                 for (i, c) in content.chars().enumerate() {
                     out.data[line_num][i] = match c {
-                        '1'..='9' => Cell::new(c.to_digit(10).unwrap() as i8, true),
-                        _ => Cell::new(-1, false),
+                        '1'..='9' => Cell::new(c.to_digit(10).unwrap() as i8),
+                        _ => Cell::new(-1),
                     }
                 }
             }
@@ -137,14 +145,14 @@ impl Sudoku {
     }
 
     fn get(&self, pos: &Position) -> &Cell {
-        &(self.data[pos.x][pos.y])
+        &(self.data[pos.row][pos.column])
     }
 
     fn rows() -> Vec<Vec<Position>> {
         (0..9)
             .map(|row| -> Vec<Position> {
                 (0..9)
-                    .map(|col| -> Position { Position { x: row, y: col } })
+                    .map(|col| -> Position { Position { row, column: col } })
                     .collect()
             })
             .collect()
@@ -154,7 +162,7 @@ impl Sudoku {
         (0..9)
             .map(|col| -> Vec<Position> {
                 (0..9)
-                    .map(|row| -> Position { Position { x: row, y: col } })
+                    .map(|row| -> Position { Position { row, column: col } })
                     .collect()
             })
             .collect()
@@ -169,7 +177,7 @@ impl Sudoku {
                     .map(|c| -> Position {
                         let x = start_x + c / 3;
                         let y = start_y + c % 3;
-                        Position { x, y }
+                        Position { row: x, column: y }
                     })
                     .collect()
             })
@@ -218,9 +226,6 @@ fn main() {
     // let s = Sudoku::from_file("./src/data/example1_ok.txt");
     let mut s = Sudoku::from_file("./src/data/example1.txt");
     s.print();
-    let rows = Sudoku::rows();
-    let cols = Sudoku::columns();
-    let regions = Sudoku::regions();
 
     s.solve();
 
