@@ -1,3 +1,5 @@
+use array_macro::array;
+use rand::seq::SliceRandom;
 use std::env::args;
 use std::io::BufRead;
 use std::{fs::File, io};
@@ -5,18 +7,25 @@ use std::{fs::File, io};
 #[macro_use]
 extern crate log;
 
-#[derive(Debug, Clone, Copy)]
-
 struct Cell {
     value: i8,
+    neighbors: Vec<Position>,
 }
 
 impl Cell {
     fn valid(&self) -> bool {
         self.value != -1
     }
-    fn new(value: i8) -> Cell {
-        Cell { value }
+
+    fn new(value: i8, row: usize, column: usize) -> Cell {
+        let tmp_x = row / 3;
+        let tmp_y = column / 3;
+        let region = tmp_x * 3 + tmp_y;
+        let mut neighbors: Vec<Position> = vec![];
+        neighbors.extend_from_slice(&Sudoku::ROWS[row]);
+        neighbors.extend_from_slice(&Sudoku::COLUMNS[column]);
+        neighbors.extend_from_slice(&Sudoku::REGIONS[region]);
+        Cell { value, neighbors }
     }
 
     fn as_char(&self) -> char {
@@ -39,32 +48,31 @@ struct Position {
 struct Sudoku {
     data: [[Cell; 9]; 9],
     try_count: i128,
-    rows: Vec<Vec<Position>>,
-    colums: Vec<Vec<Position>>,
-    regions: Vec<Vec<Position>>,
 }
 
 impl Sudoku {
+    const ROWS: [[Position; 9]; 9] = array![r => array![c => Position{row: r, column: c}; 9]; 9];
+    const COLUMNS: [[Position; 9]; 9] = array![c => array![r => Position{row: r, column: c}; 9]; 9];
+    const REGIONS: [[Position; 9]; 9] = Sudoku::regions_arr();
+
     fn new() -> Sudoku {
-        Sudoku {
-            data: [[Cell::new(-1); 9]; 9],
-            try_count: 0,
-            rows: Sudoku::rows(),
-            colums: Sudoku::columns(),
-            regions: Sudoku::regions(),
-        }
+        let data: [[Cell; 9]; 9] = array![r => array![c => Cell::new(-1, r, c); 9]; 9];
+        Sudoku { data, try_count: 0 }
     }
 
     fn solve(&mut self) -> bool {
         let (pos, values) = self.find_best_position();
-        debug!("pos = {:?}, values = {:?}", &pos, &values);
+        info!("pos = {:?}, values = {:?}", &pos, &values);
         if values.is_empty() {
             return self.is_ok();
         } else {
             debug!("Try on {:?} wi {:?}", &pos, &values);
             self.try_count += 1;
+            let values = values
+                .choose_multiple(&mut rand::thread_rng(), values.len());
+
             for v in values {
-                self.data[pos.row][pos.column].value = v;
+                self.data[pos.row][pos.column].value = *v;
                 if self.solve() {
                     return true;
                 }
@@ -102,36 +110,28 @@ impl Sudoku {
     }
 
     fn get_available_values(&self, pos: &Position) -> Vec<i8> {
-        let (row, col, region) = Sudoku::get_zone(pos);
+        let this_cell = self.get(pos);
+        let neighbors = &this_cell.neighbors;
 
-        let mut cells: Vec<Position> = self.rows[row].clone();
-        cells.extend(self.colums[col].clone());
-        cells.extend(self.regions[region].clone());
-
-        let cells: Vec<i8> = cells
-            .into_iter()
+        let neighbors: Vec<i8> = neighbors
+            .iter()
             .map(|p| -> i8 { self.data[p.row][p.column].value })
             .collect();
-        (1..10).filter(|v| -> bool { !cells.contains(v) }).collect()
-    }
 
-    fn get_zone(pos: &Position) -> (usize, usize, usize) {
-        let tmp_x = pos.row / 3;
-        let tmp_y = pos.column / 3;
-        (pos.row, pos.column, tmp_x * 3 + tmp_y)
+        (1..10)
+            .filter(|v| -> bool { !neighbors.contains(v) })
+            .collect()
     }
 
     fn print(&self) {
         println!("Status: OK? {}", self.is_ok());
-        for r in self.data {
-            let out: Vec<String> = r
-                .into_iter()
-                .map(|num| -> String { num.as_string() })
-                .collect();
+        for r in &self.data {
+            let out: Vec<String> = r.iter().map(|num| -> String { num.as_string() }).collect();
             println!("{}", out.join(" "));
         }
         println!();
     }
+
     fn from_file(file_name: &str) -> Sudoku {
         let mut out = Sudoku::new();
         let file = File::open(file_name).unwrap();
@@ -139,9 +139,9 @@ impl Sudoku {
         for (line_num, line) in lines.enumerate() {
             if let Ok(content) = line {
                 for (i, c) in content.chars().enumerate() {
-                    out.data[line_num][i] = match c {
-                        '1'..='9' => Cell::new(c.to_digit(10).unwrap() as i8),
-                        _ => Cell::new(-1),
+                    out.data[line_num][i].value = match c {
+                        '1'..='9' => c.to_digit(10).unwrap() as i8,
+                        _ => -1_i8,
                     }
                 }
             }
@@ -154,44 +154,32 @@ impl Sudoku {
         &(self.data[pos.row][pos.column])
     }
 
-    fn rows() -> Vec<Vec<Position>> {
-        (0..9)
-            .map(|row| -> Vec<Position> {
-                (0..9)
-                    .map(|col| -> Position { Position { row, column: col } })
-                    .collect()
-            })
-            .collect()
-    }
+    #[allow(dead_code)]
+    const fn regions_arr() -> [[Position; 9]; 9] {
+        let mut regions = [[Position { row: 0, column: 0 }; 9]; 9];
+        let mut reg = 0;
+        while reg < 9 {
+            let start_x = (reg / 3) * 3;
+            let start_y = (reg % 3) * 3;
 
-    fn columns() -> Vec<Vec<Position>> {
-        (0..9)
-            .map(|col| -> Vec<Position> {
-                (0..9)
-                    .map(|row| -> Position { Position { row, column: col } })
-                    .collect()
-            })
-            .collect()
-    }
+            let mut index = 0;
+            while index < 9 {
+                let x = start_x + index / 3;
+                let y = start_y + index % 3;
 
-    fn regions() -> Vec<Vec<Position>> {
-        (0..9)
-            .map(|r| -> Vec<Position> {
-                let start_x = (r / 3) * 3;
-                let start_y = (r % 3) * 3;
-                (0..9)
-                    .map(|c| -> Position {
-                        let x = start_x + c / 3;
-                        let y = start_y + c % 3;
-                        Position { row: x, column: y }
-                    })
-                    .collect()
-            })
-            .collect()
+                regions[reg][index] = Position { row: x, column: y };
+
+                index += 1;
+            }
+
+            reg += 1;
+        }
+
+        regions
     }
 
     fn is_ok(&self) -> bool {
-        let check_a_zone = |zone: &Vec<Vec<Position>>| -> bool {
+        let check_a_zone = |zone: &[[Position; 9]; 9]| -> bool {
             let expected: Vec<i8> = (1..10).collect();
             for row in zone {
                 let mut r: Vec<i8> = row.iter().map(|p| -> i8 { self.get(p).value }).collect();
@@ -203,7 +191,9 @@ impl Sudoku {
             true
         };
 
-        check_a_zone(&self.rows) && check_a_zone(&self.colums) && check_a_zone(&self.regions)
+        check_a_zone(&Sudoku::ROWS)
+            && check_a_zone(&Sudoku::COLUMNS)
+            && check_a_zone(&Sudoku::REGIONS)
     }
 }
 
@@ -211,10 +201,15 @@ fn main() {
     env_logger::init();
     let args: Vec<String> = args().collect();
     let file_name = &args[1];
+
+    info!("Try to solve problem in file {}", &file_name);
+
     let mut s = Sudoku::from_file(file_name.as_str());
+
     s.print();
 
     s.solve();
     s.print();
+
     println!("end, try count = {}", s.try_count);
 }
