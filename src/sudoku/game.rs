@@ -26,7 +26,6 @@ impl Sudoku {
             neighbors.extend_from_slice(&Sudoku::ROWS[row]);
             neighbors.extend_from_slice(&Sudoku::COLUMNS[column]);
             neighbors.extend_from_slice(&Sudoku::REGIONS[region]);
-            println!("size = {}", neighbors.len());
             neighbors
         }
         let data: [[Cell; 9]; 9] =
