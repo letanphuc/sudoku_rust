@@ -1,6 +1,6 @@
 use super::position::Position;
 
-
+#[derive(Clone)]
 pub struct Cell {
     pub value: i8,
     pub neighbors: Vec<Position>,

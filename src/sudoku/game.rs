@@ -1,10 +1,11 @@
+use super::cell::Cell;
+use super::position::Position;
 use array_macro::array;
-use rand::seq::SliceRandom;
+use rayon::prelude::*;
 use std::io::BufRead;
 use std::{fs::File, io};
 
-use super::cell::Cell;
-use super::position::Position;
+#[derive(Clone)]
 pub struct Sudoku {
     data: [[Cell; 9]; 9],
     pub try_count: i128,
@@ -41,16 +42,27 @@ impl Sudoku {
         } else {
             debug!("Try on {:?} wi {:?}", &pos, &values);
             self.try_count += 1;
-            let values = values.choose_multiple(&mut rand::thread_rng(), values.len());
 
-            for v in values {
-                self.data[pos.row][pos.column].value = *v;
-                if self.solve() {
-                    return true;
-                }
+            let result: Vec<_> = values
+                .into_par_iter()
+                .filter_map(|v| {
+                    let mut tmp = self.clone();
+                    tmp.data[pos.row][pos.column].value = v;
+                    let ret = tmp.solve();
+                    if ret {
+                        // tmp.print();
+                        Some(tmp)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            if result.len() > 0 {
+                let b = &result[0];
+                println!("------------- count = {}", b.try_count);
+                b.print();
             }
-            info!("Roll back here!!!!");
-            self.data[pos.row][pos.column].value = -1;
         }
         false
     }
