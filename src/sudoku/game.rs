@@ -8,7 +8,7 @@ use std::{fs::File, io};
 #[derive(Clone)]
 pub struct Sudoku {
     data: [[Cell; 9]; 9],
-    pub try_count: i128,
+    pub try_count: u128,
 }
 
 impl Sudoku {
@@ -27,6 +27,9 @@ impl Sudoku {
             neighbors.extend_from_slice(&Sudoku::ROWS[row]);
             neighbors.extend_from_slice(&Sudoku::COLUMNS[column]);
             neighbors.extend_from_slice(&Sudoku::REGIONS[region]);
+            neighbors.dedup();
+            neighbors.retain(|p| !(p.row == row && p.column == column));
+            assert!(neighbors.len() == 24, "Each call should have 24 neighbors");
             neighbors
         }
         let data: [[Cell; 9]; 9] =
@@ -145,22 +148,22 @@ impl Sudoku {
     #[allow(dead_code)]
     const fn regions_arr() -> [[Position; 9]; 9] {
         let mut regions = [[Position { row: 0, column: 0 }; 9]; 9];
-        let mut reg = 0;
-        while reg < 9 {
-            let start_x = (reg / 3) * 3;
-            let start_y = (reg % 3) * 3;
+        let mut region = 0;
+        while region < 9 {
+            let start_row = (region / 3) * 3;
+            let start_column = (region % 3) * 3;
 
             let mut index = 0;
             while index < 9 {
-                let x = start_x + index / 3;
-                let y = start_y + index % 3;
+                let row = start_row + index / 3;
+                let column = start_column + index % 3;
 
-                regions[reg][index] = Position { row: x, column: y };
+                regions[region][index] = Position { row, column };
 
                 index += 1;
             }
 
-            reg += 1;
+            region += 1;
         }
 
         regions
@@ -169,14 +172,13 @@ impl Sudoku {
     fn is_ok(&self) -> bool {
         let check_a_zone = |zone: &[[Position; 9]; 9]| -> bool {
             let expected: Vec<i8> = (1..10).collect();
-            for row in zone {
-                let mut r: Vec<i8> = row.iter().map(|p| -> i8 { self.get(p).value }).collect();
-                r.sort_unstable();
-                if r != expected {
-                    return false;
-                }
-            }
-            true
+            zone.into_iter()
+                .map(|row| {
+                    let mut row_values: Vec<i8> = row.iter().map(|p| self.get(p).value).collect();
+                    row_values.sort_unstable();
+                    row_values == expected
+                })
+                .all(|x| x)
         };
 
         check_a_zone(&Sudoku::ROWS)

@@ -21,7 +21,9 @@
 		{
 			"type": "cargo",
 			"command": "run",
-			"args": ["src/data/example5.txt"],
+			"args": [
+				"src/data/example3.txt"
+			],
 			"problemMatcher": [
 				"$rustc"
 			],

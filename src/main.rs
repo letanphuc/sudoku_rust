@@ -1,5 +1,6 @@
-use std::env::args;
 mod sudoku;
+use std::env::args;
+use sudoku::game::Sudoku;
 
 #[macro_use]
 extern crate log;
@@ -11,7 +12,7 @@ fn main() {
 
     info!("Try to solve problem in file {}", &file_name);
 
-    let mut s = sudoku::game::Sudoku::from_file(file_name.as_str());
+    let mut s = Sudoku::from_file(file_name.as_str());
 
     s.print();
 
