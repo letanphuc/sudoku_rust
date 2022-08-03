@@ -37,8 +37,9 @@ impl Sudoku {
     pub fn solve(&mut self) -> bool {
         let (pos, values) = self.find_best_position();
         info!("pos = {:?}, values = {:?}", &pos, &values);
+
         if values.is_empty() {
-            return self.is_ok();
+            self.is_ok()
         } else {
             debug!("Try on {:?} wi {:?}", &pos, &values);
             self.try_count += 1;
@@ -50,7 +51,6 @@ impl Sudoku {
                     tmp.data[pos.row][pos.column].value = v;
                     let ret = tmp.solve();
                     if ret {
-                        // tmp.print();
                         Some(tmp)
                     } else {
                         None
@@ -58,13 +58,13 @@ impl Sudoku {
                 })
                 .collect();
 
-            if result.len() > 0 {
-                let b = &result[0];
-                println!("------------- count = {}", b.try_count);
-                b.print();
+            if let Some(b) = result.first() {
+                *self = b.clone();
+                true
+            } else {
+                false
             }
         }
-        false
     }
 
     fn find_best_position(&mut self) -> (Position, Vec<i8>) {
@@ -108,7 +108,11 @@ impl Sudoku {
     }
 
     pub fn print(&self) {
-        println!("Status: OK? {}", self.is_ok());
+        println!(
+            "Status: OK? {}, try count = {}",
+            self.is_ok(),
+            self.try_count
+        );
         for r in &self.data {
             let out: Vec<String> = r.iter().map(|num| -> String { num.as_string() }).collect();
             println!("{}", out.join(" "));

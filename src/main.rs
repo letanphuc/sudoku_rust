@@ -16,7 +16,6 @@ fn main() {
     s.print();
 
     s.solve();
-    // s.print();
 
-    // println!("end, try count = {}", s.try_count);
+    s.print();
 }
