@@ -19,11 +19,11 @@ impl Sudoku {
     pub const REGIONS: [[Position; 9]; 9] = Sudoku::regions_arr();
 
     fn new() -> Sudoku {
-        fn get_neighbors(row: usize, column: usize) -> Vec<Position> {
+        let get_neighbors = |row: usize, column: usize| {
             let tmp_x = row / 3;
             let tmp_y = column / 3;
             let region = tmp_x * 3 + tmp_y;
-            let mut neighbors = vec![];
+            let mut neighbors: Vec<Position> = vec![];
             neighbors.extend_from_slice(&Sudoku::ROWS[row]);
             neighbors.extend_from_slice(&Sudoku::COLUMNS[column]);
             neighbors.extend_from_slice(&Sudoku::REGIONS[region]);
@@ -31,9 +31,8 @@ impl Sudoku {
             neighbors.retain(|p| !(p.row == row && p.column == column));
             assert!(neighbors.len() == 24, "Each call should have 24 neighbors");
             neighbors
-        }
-        let data: [[Cell; 9]; 9] =
-            array![r => array![c => Cell{value: -1, neighbors: get_neighbors(r, c)}; 9]; 9];
+        };
+        let data = array![r => array![c => Cell{value: -1, neighbors: get_neighbors(r, c)}; 9]; 9];
         Sudoku { data, try_count: 0 }
     }
 
@@ -80,7 +79,7 @@ impl Sudoku {
                 let pos = Position { row, column: col };
                 let cell = self.get(&pos);
                 if !cell.valid() {
-                    let values = self.get_available_values(&pos);
+                    let values = self.get_available_values(cell);
                     debug!("{:?} -> {:?} values = {:?}", &pos, values.len(), values);
 
                     if values.len() == 1 {
@@ -96,18 +95,14 @@ impl Sudoku {
         (current_position, current_values)
     }
 
-    fn get_available_values(&self, pos: &Position) -> Vec<i8> {
-        let this_cell = self.get(pos);
-        let neighbors = &this_cell.neighbors;
-
-        let neighbors: Vec<i8> = neighbors
+    fn get_available_values(&self, cell: &Cell) -> Vec<i8> {
+        let neighbors: Vec<i8> = cell
+            .neighbors
             .iter()
-            .map(|p| -> i8 { self.data[p.row][p.column].value })
+            .map(|p| self.data[p.row][p.column].value)
             .collect();
 
-        (1..10)
-            .filter(|v| -> bool { !neighbors.contains(v) })
-            .collect()
+        (1..10).filter(|v| !neighbors.contains(v)).collect()
     }
 
     pub fn print(&self) {
@@ -117,7 +112,7 @@ impl Sudoku {
             self.try_count
         );
         for r in &self.data {
-            let out: Vec<String> = r.iter().map(|num| -> String { num.as_string() }).collect();
+            let out: Vec<String> = r.iter().map(|num| num.as_string()).collect();
             println!("{}", out.join(" "));
         }
         println!();
@@ -170,9 +165,9 @@ impl Sudoku {
     }
 
     fn is_ok(&self) -> bool {
-        let check_a_zone = |zone: &[[Position; 9]; 9]| -> bool {
+        let check_a_zone = |zone: &[[Position; 9]; 9]| {
             let expected: Vec<i8> = (1..10).collect();
-            zone.into_iter()
+            zone.iter()
                 .map(|row| {
                     let mut row_values: Vec<i8> = row.iter().map(|p| self.get(p).value).collect();
                     row_values.sort_unstable();
