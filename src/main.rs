@@ -1,22 +1,25 @@
 mod sudoku;
-use std::env::args;
+use glob::glob;
 use sudoku::game::Sudoku;
 
 #[macro_use]
 extern crate log;
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
-    let args: Vec<String> = args().collect();
-    let file_name = &args[1];
 
-    info!("Try to solve problem in file {}", &file_name);
+    for entry in glob("./src/data/problem_*.json").expect("Failed to read glob pattern") {
+        match entry {
+            Ok(path) => {
+                let file = path.into_os_string().into_string().unwrap();
+                let mut s = Sudoku::from_json(file.as_str())?;
+                s.print();
+                s.solve();
+                s.print();
+            }
+            Err(e) => println!("{:?}", e),
+        }
+    }
 
-    let mut s = Sudoku::from_file(file_name.as_str());
-
-    s.print();
-
-    s.solve();
-
-    s.print();
+    Ok(())
 }

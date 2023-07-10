@@ -1,7 +1,7 @@
 use super::cell::Cell;
 use super::position::Position;
 use array_macro::array;
-use rayon::prelude::*;
+use serde_json::Value;
 use std::io::BufRead;
 use std::{fs::File, io};
 
@@ -38,34 +38,28 @@ impl Sudoku {
 
     pub fn solve(&mut self) -> bool {
         let (pos, values) = self.find_best_position();
-        info!("pos = {:?}, values = {:?}", &pos, &values);
 
         if values.is_empty() {
-            self.is_ok()
+            let ret = self.is_ok();
+            if ret {
+                info!("Found answer here!");
+            } else {
+                info!("Not found, return nothing");
+            }
+            ret
         } else {
             debug!("Try on {:?} wi {:?}", &pos, &values);
             self.try_count += 1;
 
-            let result: Vec<_> = values
-                .into_par_iter()
-                .filter_map(|v| {
-                    let mut tmp = self.clone();
-                    tmp.data[pos.row][pos.column].value = v;
-                    let ret = tmp.solve();
-                    if ret {
-                        Some(tmp)
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-
-            if let Some(b) = result.first() {
-                *self = b.clone();
-                true
-            } else {
-                false
+            for v in values {
+                self.data[pos.row][pos.column].value = v;
+                if self.solve() {
+                    return true;
+                }
             }
+
+            self.data[pos.row][pos.column].value = -1;
+            false
         }
     }
 
@@ -80,7 +74,6 @@ impl Sudoku {
                 let cell = self.get(&pos);
                 if !cell.valid() {
                     let values = self.get_available_values(cell);
-                    debug!("{:?} -> {:?} values = {:?}", &pos, values.len(), values);
 
                     if values.len() == 1 {
                         return (pos, values);
@@ -118,6 +111,7 @@ impl Sudoku {
         println!();
     }
 
+    #[allow(dead_code)]
     pub fn from_file(file_name: &str) -> Sudoku {
         let mut out = Sudoku::new();
         let file = File::open(file_name).unwrap();
@@ -134,6 +128,30 @@ impl Sudoku {
         }
 
         out
+    }
+
+    #[allow(dead_code)]
+    pub fn from_json(file_name: &str) -> Result<Sudoku, Box<dyn std::error::Error>> {
+        let mut out = Sudoku::new();
+        let file = File::open(file_name).unwrap();
+        let value: Value = serde_json::from_reader(file)?;
+        debug!("v = {}", value["mission"]);
+
+        let mission: Vec<char> = value["mission"].as_str().unwrap().chars().collect();
+
+        debug!("mission = {:?}", mission);
+
+        for row in 0..9 {
+            for col in 0..9 {
+                let c = mission[row * 9 + col];
+                out.data[row][col].value = match c {
+                    '1'..='9' => c.to_digit(10).unwrap() as i8,
+                    _ => -1_i8,
+                };
+            }
+        }
+
+        Ok(out)
     }
 
     fn get(&self, pos: &Position) -> &Cell {
