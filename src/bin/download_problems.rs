@@ -1,10 +1,10 @@
 extern crate reqwest;
-use std::{fs::File, io::Write};
-
+use rayon::prelude::*;
 use reqwest::header;
 use serde_json::Value;
+use std::{fs::File, io::Write};
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn gen_header() -> header::HeaderMap {
     let mut headers = header::HeaderMap::new();
     headers.insert("authority", "sudoku.com".parse().unwrap());
     headers.insert("accept", "*/*".parse().unwrap());
@@ -29,26 +29,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     headers.insert("x-easy-locale", "en".parse().unwrap());
     headers.insert("x-requested-with", "XMLHttpRequest".parse().unwrap());
 
+    headers
+}
+
+fn build_client(headers: header::HeaderMap) -> reqwest::blocking::Client {
     let client = reqwest::blocking::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
+        .default_headers(headers)
         .build()
         .unwrap();
 
-    for _ in 0..20 {
-        let res = client
-            .get("https://sudoku.com/api/level/evil")
-            .headers(headers.clone())
-            .send()?
-            .text()?;
+    client
+}
 
-        let v: Value = serde_json::from_str(res.as_str())?;
+fn download_problem(client: &reqwest::blocking::Client) -> Result<(), Box<dyn std::error::Error>> {
+    let res = client
+        .get("https://sudoku.com/api/level/evil")
+        .send()?
+        .text()?;
 
-        let file_name = format!("src/data/problem_{}.json", v["id"]);
-        let mut file = File::create(file_name.as_str())?;
-        file.write_all(res.as_bytes()).unwrap();
+    let v: Value = serde_json::from_str(res.as_str())?;
 
-        println!("{} {}", res, v["id"]);
-    }
+    let file_name = format!("data/problem_{}.json", v["id"]);
+    let mut file = File::create(file_name.as_str())?;
+    file.write_all(res.as_bytes()).unwrap();
+
+    println!("{} {}", res, v["id"]);
 
     Ok(())
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let headers = gen_header();
+    let client = build_client(headers);
+
+    loop {
+        let _ = (0..128).into_par_iter().for_each(|_op| {
+            download_problem(&client).unwrap();
+        });
+    }
 }
